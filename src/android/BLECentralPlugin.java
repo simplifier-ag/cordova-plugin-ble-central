@@ -16,6 +16,7 @@ package com.megster.cordova.ble.central;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -23,19 +24,21 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
-import android.os.ParcelUuid;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.content.IntentFilter;
-import android.os.Handler;
+import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.os.Build;
-
+import android.os.Handler;
+import android.os.ParcelUuid;
 import android.provider.Settings;
+import android.view.Window;
+
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaArgs;
 import org.apache.cordova.CordovaPlugin;
@@ -43,10 +46,17 @@ import org.apache.cordova.LOG;
 import org.apache.cordova.PermissionHelper;
 import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
-import org.json.JSONObject;
 import org.json.JSONException;
+import org.json.JSONObject;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 import static android.bluetooth.BluetoothDevice.DEVICE_TYPE_DUAL;
 import static android.bluetooth.BluetoothDevice.DEVICE_TYPE_LE;
@@ -123,6 +133,8 @@ public class BLECentralPlugin extends CordovaPlugin {
         put(BluetoothAdapter.STATE_ON, "on");
         put(BluetoothAdapter.STATE_TURNING_ON, "turningOn");
     }};
+
+    AlertDialog featureDescriptionDialog = null;
 
     public void onDestroy() {
         removeStateListener();
@@ -705,38 +717,13 @@ public class BLECentralPlugin extends CordovaPlugin {
     };
 
     private void findLowEnergyDevices(CallbackContext callbackContext, UUID[] serviceUUIDs, int scanSeconds) {
-
-
-
         if (!locationServicesEnabled()) {
             LOG.w(TAG, "Location Services are disabled");
         }
 
-        if (Build.VERSION.SDK_INT >= 29) {                                  // (API 29) Build.VERSION_CODES.Q
-            if (!PermissionHelper.hasPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
-                permissionCallback = callbackContext;
-                this.serviceUUIDs = serviceUUIDs;
-                this.scanSeconds = scanSeconds;
-
-                String[] permissions = {
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        "android.permission.ACCESS_BACKGROUND_LOCATION"     // (API 29) Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                };
-
-                PermissionHelper.requestPermissions(this, REQUEST_ACCESS_LOCATION, permissions);
-                return;
-            }
-        } else {
-            if(!PermissionHelper.hasPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)) {
-                // save info so we can call this method again after permissions are granted
-                permissionCallback = callbackContext;
-                this.serviceUUIDs = serviceUUIDs;
-                this.scanSeconds = scanSeconds;
-                PermissionHelper.requestPermission(this, REQUEST_ACCESS_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION);
-                return;
-            }
+        if(!checkPermissions(callbackContext)){
+            return;
         }
-
 
         // return error if already scanning
         if (bluetoothAdapter.isDiscovering()) {
@@ -787,6 +774,66 @@ public class BLECentralPlugin extends CordovaPlugin {
         PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
         result.setKeepCallback(true);
         callbackContext.sendPluginResult(result);
+    }
+
+    private boolean checkPermissions(CallbackContext callbackContext) {
+        int result;
+        List<String> listPermissionsNeeded = new ArrayList<>();
+
+        for (String p : getRequiredPermissions()) {
+            result = cordova.getActivity().checkSelfPermission(p);
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                listPermissionsNeeded.add(p);
+            }
+        }
+
+        if (!listPermissionsNeeded.isEmpty()) {
+            requestPermissions(callbackContext);
+            return false;
+        }
+        return true;
+    }
+
+    private String[] getRequiredPermissions(){
+        List<String> permissions = new ArrayList<>();
+        if(Build.VERSION.SDK_INT >= 29) {
+            if(!PermissionHelper.hasPermission(this, Manifest.permission.ACCESS_FINE_LOCATION))
+                permissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
+            if(!PermissionHelper.hasPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+                permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+        } else {
+            if(!PermissionHelper.hasPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION))
+                permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+        }
+        return permissions.toArray(new String[permissions.size()]);
+    }
+
+    private void requestPermissions(CallbackContext callbackContext) {
+        featureDescriptionDialog = new AlertDialog.Builder(cordova.getContext())
+                .setMessage(localize(
+                        cordova.getContext(),
+                        "location_usage_description"
+                ))
+                .setPositiveButton(cordova.getContext().getResources().getText(android.R.string.ok),
+                        (dialog, which) -> {
+                            featureDescriptionDialog.setOnDismissListener(null);
+                            dialog.dismiss();
+
+                            permissionCallback = callbackContext;
+                            PermissionHelper.requestPermissions(this, REQUEST_ACCESS_LOCATION, getRequiredPermissions());
+                        })
+                .setOnDismissListener(dialog -> {
+                    //dialog got dismissed/back pressed
+                    PluginResult result;
+                    if(callbackContext != null) {
+                        LOG.d(TAG, "Permission Denied!");
+                        result = new PluginResult(PluginResult.Status.ILLEGAL_ACCESS_EXCEPTION);
+                        callbackContext.sendPluginResult(result);
+                    }
+                })
+                .create();
+        featureDescriptionDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        featureDescriptionDialog.show();
     }
 
     private boolean locationServicesEnabled() {
@@ -876,6 +923,34 @@ public class BLECentralPlugin extends CordovaPlugin {
      */
     private void resetScanOptions() {
         this.reportDuplicates = false;
+    }
+
+    /**
+     * @param filename     Name of the file
+     * @param resourceType Type of resource (ID, STRING, LAYOUT, DRAWABLE)
+     * @return The associated resource identifier. Returns 0 if no such resource was found. (0 is not a valid resource ID.)
+     */
+    private int getResourceId(Context context, String filename, String resourceType) {
+        String package_name = context.getPackageName();
+        Resources resources = context.getResources();
+
+        return resources.getIdentifier(filename, resourceType, package_name);
+    }
+
+    /**
+     * @param identifier string identifier of the resource
+     * @return The localized string. Returns identifier if no such resource was found.
+     */
+    public String localize(Context context, String identifier, Object... args) {
+        int id = getResourceId(context, identifier, "string");
+
+        if (id == 0) {
+            return identifier;
+        } else {
+            return args.length > 0
+                    ? String.format(context.getResources().getString(id), args)
+                    : context.getResources().getString(id);
+        }
     }
 
 }
