@@ -26,15 +26,14 @@ import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanFilter;
-import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
+import android.os.Handler;
 import android.os.ParcelUuid;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Build;
 
@@ -419,28 +418,31 @@ public class BLECentralPlugin extends CordovaPlugin {
                     break;
             }
 
-            switch (options.optString("phy", "")) {
-                case "":
-                    break;
-                case "1m":
-                    scanSettings.setPhy( BluetoothDevice.PHY_LE_1M );
-                    break;
-                case "coded":
-                    scanSettings.setPhy( BluetoothDevice.PHY_LE_CODED );
-                    break;
-                case "all":
-                    scanSettings.setPhy( ScanSettings.PHY_LE_ALL_SUPPORTED );
-                    break;
-                default:
-                    callbackContext.error("phy must be one of: 1m | coded | all");
-                    validAction = false;
-                    break;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                switch (options.optString("phy", "")) {
+                    case "":
+                        break;
+                    case "1m":
+                        scanSettings.setPhy(BluetoothDevice.PHY_LE_1M);
+                        break;
+                    case "coded":
+                        scanSettings.setPhy(BluetoothDevice.PHY_LE_CODED);
+                        break;
+                    case "all":
+                        scanSettings.setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED);
+                        break;
+                    default:
+                        callbackContext.error("phy must be one of: 1m | coded | all");
+                        validAction = false;
+                        break;
+                }
             }
 
             if (validAction) {
                 String LEGACY = "legacy";
-                if (!options.isNull(LEGACY))
-                    scanSettings.setLegacy( options.getBoolean(LEGACY) );
+                if (!options.isNull(LEGACY) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    scanSettings.setLegacy(options.getBoolean(LEGACY));
+                }
 
                 long reportDelay = options.optLong("reportDelay", -1 );
                 if (reportDelay >= 0L)
@@ -874,7 +876,7 @@ public class BLECentralPlugin extends CordovaPlugin {
                     LOG.d(TAG, "Stopping Scan");
                     bluetoothLeScanner.stopScan(leScanCallback);
                 }
-            }, scanSeconds * 1000);
+            }, scanSeconds * 1000L);
         }
 
         PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
