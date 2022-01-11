@@ -3,7 +3,7 @@
     xmlns="http://www.phonegap.com/ns/plugins/1.0"
     xmlns:android="http://schemas.android.com/apk/res/android"
     id="cordova-plugin-ble-central"
-    version="1.3.2">
+    version="1.4.1">
 
     <name>BLE</name>
     <description>Bluetooth Low Energy (BLE) Central Plugin</description>
@@ -16,7 +16,7 @@
     <js-module src="www/ble.js" name="ble">
         <clobbers target="ble" />
     </js-module>
-    
+
     <platform name="ios">
 
         <preference name="IOS_INIT_ON_LOAD" default="true" />
@@ -49,6 +49,7 @@
     </platform>
 
     <platform name="android">
+        <preference name="ACCESS_BACKGROUND_LOCATION" default="false" />
         <preference name="LOCATION_USAGE_DESCRIPTION" default="This app needs access to the location services to scan for bluetooth devices."/>
 
         <config-file target="res/xml/config.xml" parent="/widget">
@@ -56,7 +57,7 @@
                 <param name="android-package" value="com.megster.cordova.ble.central.BLECentralPlugin"/>
             </feature>
         </config-file>
-        
+
 
         <config-file target="./res/xml/strings.xml" parent="/resources">
             <string name="location_usage_description">$LOCATION_USAGE_DESCRIPTION</string>
@@ -70,6 +71,12 @@
             <uses-permission android:name="android.permission.BLUETOOTH"/>
             <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
         </config-file>
+
+        <config-file target="res/xml/config.xml" parent="/*">
+            <preference name="accessBackgroundLocation" value="$ACCESS_BACKGROUND_LOCATION"/>
+        </config-file>
+
+        <hook type="after_prepare" src="hooks/after_prepare.js"/>
 
         <source-file src="src/android/BLECentralPlugin.java"
             target-dir="src/com/megster/cordova/ble/central"/>
