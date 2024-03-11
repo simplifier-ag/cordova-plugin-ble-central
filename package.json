@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/don/cordova-plugin-ble-central.git"
+    "url": "git+https://github.com/simplifier-ag/cordova-plugin-ble-central.git"
   },
   "keywords": [
     "cordova",
